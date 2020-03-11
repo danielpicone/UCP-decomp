@@ -1,0 +1,94 @@
+# Generators
+
+NSW:
+  generators:
+    coal:
+      capacity: 30
+      cost: 10
+      ramp: 15
+      mingen: 12
+      startup: 100
+
+    mid-merit-gas:
+      capacity: 20
+      cost: 30
+      ramp: 10
+      mingen: 2
+      startup: 30
+
+    peaking-gas:
+      capacity: 30
+      cost: 80
+      ramp: 20
+      mingen: 3
+      startup: 20
+
+    dsm:
+      capacity: 25
+      cost: 1000
+      ramp: 10000
+      mingen: 0
+      startup: 0
+
+    dsm_voll:
+      capacity: 10000
+      cost: 14000
+      ramp: 10000
+      mingen: 0
+      startup: 0
+
+  interconnectors:
+    vic-nsw:
+      to: "VIC"
+      capacity: 20
+      loss: 0.05
+
+VIC:
+  generators:
+    coal:
+      capacity: 30
+      cost: 10
+      ramp: 15
+      mingen: 12
+      startup: 100
+
+    mid-merit-gas:
+      capacity: 20
+      cost: 30
+      ramp: 17
+      mingen: 2
+      startup: 30
+
+    peaking-gas:
+      capacity: 30
+      cost: 80
+      ramp: 20
+      mingen: 3
+      startup: 20
+
+    dsm:
+      capacity: 30
+      cost: 1000
+      ramp: 10000
+      mingen: 0
+      startup: 0
+
+    dsm_voll:
+      capacity: 10000
+      cost: 14000
+      ramp: 10000
+      mingen: 0
+      startup: 0
+
+    wind:
+      capacity: 15
+      cost: 0
+      ramp: 10000
+      mingen: 1.5
+      startup: 0
+
+  interconnectors:
+    vic-nsw:
+      to: "NSW"
+      capacity: 15
+      loss: 0.1
