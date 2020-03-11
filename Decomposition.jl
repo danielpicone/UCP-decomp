@@ -39,6 +39,7 @@ function create_model!(subproblem::Subproblem; verbose = false)
         println("Adding variables")
     end
     @variable(subproblem_model, deficit[r=regions, t=start:finish] >= 0)
+    @variable(subproblem_model, 0 >= surplus[r=regions, t=start:finish] >= 0)
     @variable(subproblem_model, 1>=generator_output[r=regions, keys(generators[r]["generators"]), t=start:finish]>=0)
     @variable(subproblem_model, generator_on[r=regions, keys(generators[r]["generators"]), t=start:finish], Bin)
     @variable(subproblem_model, generator_startup[r=regions, keys(generators[r]["generators"]), t=start:finish], Bin)
@@ -49,10 +50,12 @@ function create_model!(subproblem::Subproblem; verbose = false)
     # Objective function
     if isnothing(mu)
         @objective(subproblem_model, Min, sum(d["cost"] * d["capacity"] * generator_output[r, gen, t] + d["startup"]*generator_startup[r, gen,t] for r in regions, (gen,d) in generators[r]["generators"],t=start:finish) +
-            sum(14700*deficit[r, t] for r in regions, t=start:finish))
+            sum(14700*deficit[r, t] for r in regions, t=start:finish) +
+            sum(1000*surplus[r, t] for r in regions, t=start:finish))
     else
         @objective(subproblem_model, Min, sum(d["cost"] * d["capacity"] * generator_output[r, gen, t] + d["startup"]*generator_startup[r, gen,t] for r in regions, (gen,d) in generators[r]["generators"],t=start:finish) +
             sum(14700*deficit[r, t] for r in regions, t=start:finish) +
+            sum(1000*surplus[r, t] for r in regions, t=start:finish) +
             sum((mu[r][gen]["ramp_down"]- mu[r][gen]["ramp_up"]) * d["capacity"]*generator_output[r, gen, finish] for r in regions, (gen, d) in generators[r]["generators"]) +
             sum((-mu[r][gen]["ramp_down"] + mu[r][gen]["ramp_up"]) * d["capacity"]*generator_output[r, gen, start] for r in regions, (gen, d) in generators[r]["generators"]))
             # sum((-mu[r][gen]["ramp_down"] + mu[r][gen]["ramp_up"]) * d["capacity"]*generator_output[r, gen, start] for r in regions, (gen, d) in generators[r]["generators"]) - convexity_dual)
@@ -63,7 +66,8 @@ function create_model!(subproblem::Subproblem; verbose = false)
         println("Adding constraints")
     end
     @constraint(subproblem_model, demand_constraint[r=regions,t=start:finish], sum(d["capacity"]*generator_output[r,gen,t] for (gen,d) in generators[r]["generators"]) -
-        sum(i["capacity"]*interconnector[r, int, t, "export"] for (int, i) in generators[r]["interconnectors"]) + sum(i["capacity"]*interconnector[r, int, t, "import"] for (int, i) in generators[r]["interconnectors"]) == subproblem.demand[r][t])
+        sum(i["capacity"]*interconnector[r, int, t, "export"] for (int, i) in generators[r]["interconnectors"]) + sum(i["capacity"]*interconnector[r, int, t, "import"] for (int, i) in generators[r]["interconnectors"])
+        + deficit[r, t] - surplus[r,t] == subproblem.demand[r][t])
 
     # Min gen constraints
     @constraint(subproblem_model, min_gen[r=regions, gen in keys(generators[r]["generators"]), t=start:finish], generators[r]["generators"][gen]["capacity"]*generator_output[r, gen, t] >= generators[r]["generators"][gen]["mingen"]*generator_on[r, gen, t])
@@ -111,6 +115,8 @@ function update_objective(problem::Subproblem)
     finish = problem.finish
     mu = problem.mu
     @objective(subproblem_model, Min, sum(d["cost"] * d["capacity"] * generator_output[r, gen, t] + d["startup"]*generator_startup[r, gen,t] for r in regions, (gen,d) in generators[r]["generators"],t=start:finish) +
+        sum(14700*deficit[r, t] for r in regions, t=start:finish) +
+        sum(1000*surplus[r, t] for r in regions, t=start:finish) +
         sum((mu[r][gen]["ramp_down"]- mu[r][gen]["ramp_up"]) * d["capacity"]*generator_output[r, gen, finish] for r in regions, (gen, d) in generators[r]["generators"]) +
         sum((-mu[r][gen]["ramp_down"] + mu[r][gen]["ramp_up"]) * d["capacity"]*generator_output[r, gen, start] for r in regions, (gen, d) in generators[r]["generators"]))
 end
