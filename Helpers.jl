@@ -26,26 +26,22 @@ function graph_subproblem(subproblem_soln)
     function create_variables_dict(subproblem)
         generator_output = subproblem.model.obj_dict[:generator_output]
         generator_on = subproblem.model.obj_dict[:generator_on]
-        regions = keys(subproblem.inputs) |> collect
+        regions = subproblem.regions
         generation_vars = Dict()
-        for r in regions
-            generation_vars[r] = Dict()
-            for gen in keys(subproblem.inputs[r]["generators"])
-                generation_vars[r][gen] = Dict()
-                generation_vars[r][gen]["generation"] = Dict()
-                generation_vars[r][gen]["on"] = Dict()
-                for t=subproblem.start:subproblem.finish
-                    generation_vars[r][gen]["generation"][t] = value.(generator_output[r, gen,t])
-                    generation_vars[r][gen]["on"][t] = value.(generator_on[r, gen,t])
-                end
+        for (gen_name, gen_info) in subproblem.inputs["generators"]
+            generation_vars[gen_name] = Dict()
+            generation_vars[gen_name]["generation"] = Dict()
+            generation_vars[gen_name]["on"] = Dict()
+            for t=subproblem.start:subproblem.finish
+                generation_vars[gen_name]["generation"][t] = value.(generator_output[gen_name,t])
+                generation_vars[gen_name]["on"][t] = value.(generator_on[gen_name,t])
             end
         end
         df = DataFrames.DataFrame(region = String[], generator_name = String[], cost = Float64[], max_capacity = Float64[], interval = Int64[], generation = Float64[], demand = Float64[])
-        for r in regions
-            for (gen_name, gen_info) in subproblem.inputs[r]["generators"]
-                for t=subproblem.start:subproblem.finish
-                    push!(df, [r gen_name gen_info["cost"] gen_info["capacity"] t gen_info["capacity"]*generation_vars[r][gen_name]["generation"][t] subproblem.demand[r][t]])
-                end
+        for (gen_name, gen_info) in subproblem.inputs["generators"]
+            r = gen_info["region"]
+            for t=subproblem.start:subproblem.finish
+                push!(df, [r gen_name gen_info["cost"] gen_info["capacity"] t gen_info["capacity"]*generation_vars[gen_name]["generation"][t] subproblem.demand[r][t]])
             end
         end
     return df
@@ -55,6 +51,7 @@ function graph_subproblem(subproblem_soln)
     demand_df = create_demand_df(subproblem_soln)
     demand_df[:interval] = demand_df[:interval] .- 0.5
 
+    # println(filter(row -> row[:interval] <= 19 & row[:interval] >= 17, df))
     plot(df, ygroup=:region,
        Geom.subplot_grid(
        layer(sort!(demand_df, rev=true), x=:interval,y=:value, ygroup=:region,Geom.step, Theme(default_color="black")),
@@ -69,11 +66,9 @@ function reset_mu(K=nothing)
     mu = Dict()
     for k=1:K-1
         mu[(k,k+1)] = Dict()
-        for r in regions
-            mu[(k,k+1)][r] = Dict()
-            for gen in keys(generators[r]["generators"])
-                mu[(k,k+1)][r][gen] = Dict("ramp_up" => 0, "ramp_down" => 0)
-            end
+        mu[(k,k+1)] = Dict()
+        for gen in keys(inputs["generators"])
+            mu[(k,k+1)][gen] = Dict("ramp_up" => 0, "ramp_down" => 0)
         end
     end
     return mu

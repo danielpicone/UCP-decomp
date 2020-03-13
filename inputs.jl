@@ -26,9 +26,9 @@ end
 
 Random.seed!(100)
 
-T = 24*2
-generators = YAML.load(open("generators-regions.yml"))
-regions = keys(generators) |> collect
+T = 24*2*2
+inputs= YAML.load(open("generators-regions.yml"))
+regions = Set([gen_info["region"] for (gen_name, gen_info) in inputs["generators"]])
 demand = Dict()
 directions = ["import", "export"]
 for t=1:T
@@ -37,70 +37,95 @@ for t=1:T
         if t==1
             demand[r] = Dict()
         end
-        demand[r][t] = 45+40*(rand()-0.5)*rand_addition
+        # demand[r][t] = 45+40*(rand()-0.5)*rand_addition
+        demand[r][t] = 45+70*(rand()-0.5)*rand_addition
     end
 end
 
-# demand["NSW"][T+1] = demand["NSW"][T]-30
+# demand["NSW"][24] = demand["NSW"][24]-15
+# demand["NSW"][25] = demand["NSW"][25]-30
+# demand["NSW"][26] = demand["NSW"][26]-15
 
 # Set up the master problem
 mu = Helpers.reset_mu()
 
-day_one = Decomposition.Subproblem(1, T, demand, generators, mu, nothing)
+day_one = Decomposition.Subproblem(1, T, nothing, demand, inputs, regions, mu, nothing)
 
 Decomposition.create_model!(day_one)
 
 # Solve the model
-optimize!(day_one.model)
-Helpers.graph_subproblem(day_one)
+# optimize!(day_one.model)
+# Helpers.graph_subproblem(day_one)
 
+S = 2
 mu = Dict()
-for k=1:K-1
-    mu[(k,k+1)] = Dict()
-    for r in regions
-        mu[(k,k+1)][r] = Dict()
-        for gen in keys(generators[r]["generators"])
-            mu[(k,k+1)][r][gen] = Dict("ramp_up" => -10000, "ramp_down" => 0)
-        end
+for s=1:S-1
+    mu[(s,s+1)] = Dict()
+    for gen in keys(inputs["generators"])
+        mu[(s,s+1)][gen] = Dict("ramp_up" => -10000, "ramp_down" => 0)
     end
 end
 
-day_one2 = copy(day_one)
-day_one2.mu = mu[(1, 2)]
-Decomposition.create_model!(day_one2)
+# day_one2 = copy(day_one)
+# day_one2.mu = mu[(1, 2)]
+# p1 = Decomposition.create_model!(day_one2)
 
-optimize!(day_one2)
-Helpers.graph_subproblem(day_one2)
+# optimize!(day_one2)
+# p2 = Helpers.graph_subproblem(day_one2)
 
 
 
 
 # output = value.(day_one.model.obj_dict[:generator_output])
 output = day_one.model.obj_dict[:generator_output]
-K = 2
-subproblems = Decomposition.split_problem(day_one, K)
+subproblems = Decomposition.split_problem(day_one, S)
 Decomposition.create_model!(subproblems)
-# for i in 1:K
-#     println(i)
-#     Decomposition.create_model!(subproblems[i])
-#     optimize!(subproblems[i])
-# end
+optimize!(subproblems)
 
 
-# for i in output
-#     println(i)
-# end
-# day_one = Decomposition.Subproblem_solution(day_one, optimize!(day_one.model))
+# Price the deficit subproblems
+deficit_values = Dict()
+for subproblem in subproblems
+    s = subproblem.order
+    deficit_values[s] = 0
+    for trace in values(subproblem.demand)
+        deficit_values[s] += sum(14700*value for value in values(trace))
+    end
+end
+
+
+# K = 2
+# rmp = JuMP.Model(with_optimizer(GLPK.Optimizer, msg_lev = GLPK.MSG_ALL))
+#
+# @variable(rmp, 1 >= lambda_deficit[s=1:S] >= 0)
+# @variable(rmp, 1 >= lambda[s=1:S, 1] >= 0)
+# @objective(rmp, Min, sum(deficit_values[s] * lambda_deficit[s] for s=1:S) +
+#                         sum(objective_value(subproblems[s].model)*lambda[s, 1] for s=1:S))
+#
+# @constraint(rmp, convexity_constraint[s=1:S], sum(lambda_deficit[s]) + sum(lambda[s, k] for k=1:K) == 1)
+# @constraint(rmp, ramp_down[s=1, gen in keys(subproblems[s].inputs["generators"])],
+#             subproblems[s].inputs["generators"][gen]["capacity"]*sum(lambda[s, k] for k=1:K) -
+#             subproblems[s].inputs["generators"][gen]["capacity"]*sum(lambda[s+1, k] for k=1:K) <=
+#             subproblems[s].inputs["generators"][gen]["ramp"])
+#
+# @constraint(rmp, ramp_up[s=1, gen in keys(subproblems[s].inputs["generators"])],
+#             subproblems[s].inputs["generators"][gen]["capacity"]*sum(lambda[s, k] for k=1:K) -
+#             subproblems[s].inputs["generators"][gen]["capacity"]*sum(lambda[s+1, k] for k=1:K) >=
+#             -subproblems[s].inputs["generators"][gen]["ramp"])
+#
+# optimize!(rmp)
+# value.(lambda)
+
 
 ## Create the subproblems
 # subproblems = []
 # subproblem_solution = []
 # subproblem_objective_values = []
-# # convexity_duals = zeros(K)
+# # convexity_duals = zeros(S)
 # S = 1
 
-# voll_cost = Array{Float64}(undef, K)
-# for k=1:K
+# voll_cost = Array{Float64}(undef, S)
+# for k=1:S
 #     voll_cost[k] = sum.(v[:,k]*generators[region]["generators"]["dsm_voll"]["cost"] for (region, v) in demand) |> sum
 # end
 #

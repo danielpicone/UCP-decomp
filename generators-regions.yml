@@ -1,94 +1,107 @@
 # Generators
+generators:
+  coal_NSW:
+    capacity: 30
+    cost: 10
+    ramp: 15
+    mingen: 12
+    startup: 100
+    region: "NSW"
 
-NSW:
-  generators:
-    coal:
-      capacity: 30
-      cost: 10
-      ramp: 15
-      mingen: 12
-      startup: 100
+  mid-merit-gas_NSW:
+    capacity: 20
+    cost: 30
+    ramp: 10
+    mingen: 2
+    startup: 30
+    region: "NSW"
 
-    mid-merit-gas:
-      capacity: 20
-      cost: 30
-      ramp: 10
-      mingen: 2
-      startup: 30
+  hydro_NSW:
+    capacity: 10
+    cost: 4
+    ramp: 10
+    mingen: 1
+    startup: 0
+    region: "NSW"
+    max_cf: 0.4
 
-    peaking-gas:
-      capacity: 30
-      cost: 80
-      ramp: 20
-      mingen: 3
-      startup: 20
+  peaking-gas_NSW:
+    capacity: 30
+    cost: 80
+    ramp: 20
+    mingen: 3
+    startup: 20
+    region: "NSW"
 
-    dsm:
-      capacity: 25
-      cost: 1000
-      ramp: 10000
-      mingen: 0
-      startup: 0
+  dsm_NSW:
+    capacity: 25
+    cost: 1000
+    ramp: 10000
+    mingen: 0
+    startup: 0
+    region: "NSW"
 
-    dsm_voll:
-      capacity: 10000
-      cost: 14000
-      ramp: 10000
-      mingen: 0
-      startup: 0
+  dsm_voll_NSW:
+    capacity: 10000
+    cost: 14000
+    ramp: 10000
+    mingen: 0
+    startup: 0
+    region: "NSW"
 
-  interconnectors:
-    vic-nsw:
-      to: "VIC"
-      capacity: 20
-      loss: 0.05
 
-VIC:
-  generators:
-    coal:
-      capacity: 30
-      cost: 10
-      ramp: 15
-      mingen: 12
-      startup: 100
+  coal_VIC:
+    capacity: 30
+    cost: 10
+    ramp: 15
+    mingen: 12
+    startup: 100
+    region: "VIC"
 
-    mid-merit-gas:
-      capacity: 20
-      cost: 30
-      ramp: 17
-      mingen: 2
-      startup: 30
+  mid-merit-gas_VIC:
+    capacity: 20
+    cost: 30
+    ramp: 17
+    mingen: 2
+    startup: 30
+    region: "VIC"
 
-    peaking-gas:
-      capacity: 30
-      cost: 80
-      ramp: 20
-      mingen: 3
-      startup: 20
+  peaking-gas_VIC:
+    capacity: 30
+    cost: 80
+    ramp: 20
+    mingen: 3
+    startup: 20
+    region: "VIC"
 
-    dsm:
-      capacity: 30
-      cost: 1000
-      ramp: 10000
-      mingen: 0
-      startup: 0
+  dsm_VIC:
+    capacity: 30
+    cost: 1000
+    ramp: 10000
+    mingen: 0
+    startup: 0
+    region: "VIC"
 
-    dsm_voll:
-      capacity: 10000
-      cost: 14000
-      ramp: 10000
-      mingen: 0
-      startup: 0
+  dsm_voll_VIC:
+    capacity: 10000
+    cost: 14000
+    ramp: 10000
+    mingen: 0
+    startup: 0
+    region: "VIC"
 
-    wind:
-      capacity: 15
-      cost: 0
-      ramp: 10000
-      mingen: 1.5
-      startup: 0
+  wind_VIC:
+    capacity: 15
+    cost: 0
+    ramp: 10000
+    mingen: 1.5
+    startup: 0
+    region: "VIC"
 
-  interconnectors:
-    vic-nsw:
-      to: "NSW"
-      capacity: 15
-      loss: 0.1
+interconnectors:
+  vic-nsw:
+    from: "NSW"
+    to: "VIC"
+    export_capacity: 20
+    import_capacity: 15
+    loss: 0.05
