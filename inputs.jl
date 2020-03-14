@@ -26,7 +26,7 @@ end
 
 Random.seed!(100)
 
-T = 24*2*2
+T = 24*2*4
 inputs= YAML.load(open("generators-regions.yml"))
 regions = Set([gen_info["region"] for (gen_name, gen_info) in inputs["generators"]])
 demand = Dict()
@@ -57,7 +57,7 @@ Decomposition.create_model!(day_one)
 # optimize!(day_one.model)
 # Helpers.graph_subproblem(day_one)
 
-S = 2
+S = 4
 mu = Dict()
 for s=1:S-1
     mu[(s,s+1)] = Dict()
@@ -93,28 +93,41 @@ for subproblem in subproblems
     end
 end
 
+subproblem_solutions = Dict{Int64, Dict{Int64, Any}}()
+for (i, s) in enumerate(subproblems)
+    subproblem_solutions[i] = Dict()
+    subproblem_solutions[i][1] = s.model.obj_dict
+end
 
-# K = 2
-# rmp = JuMP.Model(with_optimizer(GLPK.Optimizer, msg_lev = GLPK.MSG_ALL))
-#
-# @variable(rmp, 1 >= lambda_deficit[s=1:S] >= 0)
-# @variable(rmp, 1 >= lambda[s=1:S, 1] >= 0)
-# @objective(rmp, Min, sum(deficit_values[s] * lambda_deficit[s] for s=1:S) +
-#                         sum(objective_value(subproblems[s].model)*lambda[s, 1] for s=1:S))
-#
-# @constraint(rmp, convexity_constraint[s=1:S], sum(lambda_deficit[s]) + sum(lambda[s, k] for k=1:K) == 1)
-# @constraint(rmp, ramp_down[s=1, gen in keys(subproblems[s].inputs["generators"])],
-#             subproblems[s].inputs["generators"][gen]["capacity"]*sum(lambda[s, k] for k=1:K) -
-#             subproblems[s].inputs["generators"][gen]["capacity"]*sum(lambda[s+1, k] for k=1:K) <=
-#             subproblems[s].inputs["generators"][gen]["ramp"])
-#
-# @constraint(rmp, ramp_up[s=1, gen in keys(subproblems[s].inputs["generators"])],
-#             subproblems[s].inputs["generators"][gen]["capacity"]*sum(lambda[s, k] for k=1:K) -
-#             subproblems[s].inputs["generators"][gen]["capacity"]*sum(lambda[s+1, k] for k=1:K) >=
-#             -subproblems[s].inputs["generators"][gen]["ramp"])
-#
-# optimize!(rmp)
-# value.(lambda)
+
+K = 1
+rmp = JuMP.Model(with_optimizer(GLPK.Optimizer, msg_lev = GLPK.MSG_ALL))
+
+@variable(rmp, 1 >= lambda_deficit[s=1:S] >= 0)
+@variable(rmp, 1 >= λ[s=1:S, 1] >= 0)
+@objective(rmp, Min, sum(deficit_values[s] * lambda_deficit[s] for s=1:S) +
+                        sum(objective_value(subproblems[s].model)*λ[s, 1] for s=1:S))
+
+@constraint(rmp, convexity_constraint[s=1:S], sum(lambda_deficit[s]) + sum(λ[s, k] for k=1:K) == 1)
+# Ramp down constraints
+@constraint(rmp, ramp_down[s=1, gen in keys(subproblems[s].inputs["generators"])],
+            value(subproblems[s].model.obj_dict[:generator_output][gen, subproblems[s].finish])*sum(λ[s, k] for k=1:K) -
+            value(subproblems[s+1].model.obj_dict[:generator_output][gen, subproblems[s+1].start])*sum(λ[s+1, k] for k=1:K) <=
+            subproblems[s].inputs["generators"][gen]["ramp"])
+
+# Ramp up constraints
+@constraint(rmp, ramp_up[s=1, gen in keys(subproblems[s].inputs["generators"])],
+            value(subproblems[s].model.obj_dict[:generator_output][gen, subproblems[s].finish])*sum(λ[s, k] for k=1:K) -
+            value(subproblems[s+1].model.obj_dict[:generator_output][gen, subproblems[s+1].start])*sum(λ[s+1, k] for k=1:K) >=
+            -subproblems[s].inputs["generators"][gen]["ramp"])
+
+# Max cf constraints
+@constraint(rmp, max_cf[gen in [key for (key, value) in subproblems[1].inputs["generators"] if "max_cf" in keys(value)]],
+            sum( λ[s, 1]*value(subproblems[s].model.obj_dict[:generator_output][gen, t]) for s=1:S, t=subproblems[s].start:subproblems[s].finish)
+            <= subproblems[S].finish*subproblems[1].inputs["generators"][gen]["max_cf"])
+
+optimize!(rmp)
+value.(λ)
 
 
 ## Create the subproblems

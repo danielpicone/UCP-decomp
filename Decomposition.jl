@@ -96,8 +96,8 @@ function create_model!(subproblem::Subproblem; verbose = false)
     # Start up constraint
     @constraint(subproblem_model, start_up[gen in keys(inputs["generators"]), t=start+1:finish], generator_startup[gen,t]>=generator_on[gen,t]-generator_on[gen,t-1])
     # Maximum capacity factor constraints
-    @constraint(subproblem_model, min_cf[gen in max_cf_gens], sum(generator_output[gen, t] for t=start:finish) <=
-                length*inputs["generators"][gen]["max_cf"])
+    # @constraint(subproblem_model, max_cf[gen in max_cf_gens], sum(generator_output[gen, t] for t=start:finish) <=
+    #             length*inputs["generators"][gen]["max_cf"])
 
     # Interconnector loss constraints
     @constraint(subproblem_model, interconnector_loss[int in keys(inputs["interconnectors"]), t=start:finish], (1-inputs["interconnectors"][int]["loss"])*interconnector[int, t, "export"] == interconnector[int, t, "import"])
