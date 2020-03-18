@@ -10,10 +10,12 @@ using Random
 
 include("Helpers.jl")
 include("Decomposition.jl")
-
-# using .Decomposition
-import .Decomposition
+include("Master.jl")
+#
+using .Decomposition
+# import .Decomposition
 using .Helpers
+using .Master
 
 # Extend optimize! for simpler syntax
 import JuMP.optimize!
@@ -26,7 +28,8 @@ end
 
 Random.seed!(100)
 
-T = 24*2*4
+S = 6
+T = 24*2*S
 inputs= YAML.load(open("generators-regions.yml"))
 regions = Set([gen_info["region"] for (gen_name, gen_info) in inputs["generators"]])
 demand = Dict()
@@ -57,88 +60,58 @@ Decomposition.create_model!(day_one)
 # optimize!(day_one.model)
 # Helpers.graph_subproblem(day_one)
 
-S = 4
-mu = Dict()
-for s=1:S-1
-    mu[(s,s+1)] = Dict()
-    for gen in keys(inputs["generators"])
-        mu[(s,s+1)][gen] = Dict("ramp_up" => -10000, "ramp_down" => 0)
-    end
-end
-
-# day_one2 = copy(day_one)
-# day_one2.mu = mu[(1, 2)]
-# p1 = Decomposition.create_model!(day_one2)
-
-# optimize!(day_one2)
-# p2 = Helpers.graph_subproblem(day_one2)
-
-
-
-
-# output = value.(day_one.model.obj_dict[:generator_output])
-output = day_one.model.obj_dict[:generator_output]
-subproblems = Decomposition.split_problem(day_one, S)
-Decomposition.create_model!(subproblems)
-optimize!(subproblems)
-
-
-# Price the deficit subproblems
-deficit_values = Dict()
-for subproblem in subproblems
-    s = subproblem.order
-    deficit_values[s] = 0
-    for trace in values(subproblem.demand)
-        deficit_values[s] += sum(14700*value for value in values(trace))
-    end
-end
 
 subproblem_solutions = Dict{Int64, Dict{Int64, Any}}()
-for (i, s) in enumerate(subproblems)
-    subproblem_solutions[i] = Dict()
-    subproblem_solutions[i][1] = s.model.obj_dict
+for s in 1:S
+    subproblem_solutions[s] = Dict()
 end
 
 
-K = 1
-rmp = JuMP.Model(with_optimizer(GLPK.Optimizer, msg_lev = GLPK.MSG_ALL))
+subproblems = Decomposition.split_problem(day_one, S)
+for k=1:10
+    if k == 1
+        global convexity_dual = 1e10*ones(S)
+    end
+    Decomposition.create_model!(subproblems; verbose = true)
+    optimize!(subproblems)
+    # [println(objective_value(s.model)) for s in subproblems]
+    # println("This is the convexity_dual $convexity_dual")
+    convergence_value = sum(objective_value(subproblems[s].model) - convexity_dual[s] for s in 1:S)
+    println("Iteration $k: $convergence_value")
+    if sum(objective_value(subproblems[s].model) - convexity_dual[s] for s in 1:S) > -0.001
+        break
+    end
 
-@variable(rmp, 1 >= lambda_deficit[s=1:S] >= 0)
-@variable(rmp, 1 >= λ[s=1:S, 1] >= 0)
-@objective(rmp, Min, sum(deficit_values[s] * lambda_deficit[s] for s=1:S) +
-                        sum(objective_value(subproblems[s].model)*λ[s, 1] for s=1:S))
+    for (s, sub) in enumerate(subproblems)
+        subproblem_solutions[s][k] = Dict("vars" => sub.model.obj_dict,
+                                          "objective_value" => objective_value(sub.model))
+    end
+    master = Master.Master_problem(subproblems, subproblem_solutions)
+    Master.create_rmp!(master)
 
-@constraint(rmp, convexity_constraint[s=1:S], sum(lambda_deficit[s]) + sum(λ[s, k] for k=1:K) == 1)
-# Ramp down constraints
-@constraint(rmp, ramp_down[s=1, gen in keys(subproblems[s].inputs["generators"])],
-            value(subproblems[s].model.obj_dict[:generator_output][gen, subproblems[s].finish])*sum(λ[s, k] for k=1:K) -
-            value(subproblems[s+1].model.obj_dict[:generator_output][gen, subproblems[s+1].start])*sum(λ[s+1, k] for k=1:K) <=
-            subproblems[s].inputs["generators"][gen]["ramp"])
+    optimize!(master.model)
+    # println(value.(master.model.obj_dict[:λ]))
+    # println(dual.(master.model.obj_dict[:convexity_constraint]))
+    convexity_dual = dual.(master.model.obj_dict[:convexity_constraint])
 
-# Ramp up constraints
-@constraint(rmp, ramp_up[s=1, gen in keys(subproblems[s].inputs["generators"])],
-            value(subproblems[s].model.obj_dict[:generator_output][gen, subproblems[s].finish])*sum(λ[s, k] for k=1:K) -
-            value(subproblems[s+1].model.obj_dict[:generator_output][gen, subproblems[s+1].start])*sum(λ[s+1, k] for k=1:K) >=
-            -subproblems[s].inputs["generators"][gen]["ramp"])
+    mu = dual(master)
 
-# Max cf constraints
-@constraint(rmp, max_cf[gen in [key for (key, value) in subproblems[1].inputs["generators"] if "max_cf" in keys(value)]],
-            sum( λ[s, 1]*value(subproblems[s].model.obj_dict[:generator_output][gen, t]) for s=1:S, t=subproblems[s].start:subproblems[s].finish)
-            <= subproblems[S].finish*subproblems[1].inputs["generators"][gen]["max_cf"])
+    for sub in subproblems
+        sub.mu = mu
+    end
 
-optimize!(rmp)
-value.(λ)
+end
 
 
-## Create the subproblems
-# subproblems = []
-# subproblem_solution = []
-# subproblem_objective_values = []
-# # convexity_duals = zeros(S)
-# S = 1
-
-# voll_cost = Array{Float64}(undef, S)
-# for k=1:S
-#     voll_cost[k] = sum.(v[:,k]*generators[region]["generators"]["dsm_voll"]["cost"] for (region, v) in demand) |> sum
+# subproblems[1].mu = mu
+# subproblems[2].mu = mu
+# Decomposition.create_model!(subproblems)
+# optimize!(subproblems)
+# for (i, s) in enumerate(subproblems)
+#     subproblem_solutions[i][2] = Dict("vars" => s.model.obj_dict,
+#                                       "objective_value" => objective_value(s.model))
 # end
 #
+# master = Master.Master_problem(subproblems, subproblem_solutions)
+# Master.create_rmp!(master)
+# optimize!(master.model)
