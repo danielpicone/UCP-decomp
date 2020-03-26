@@ -41,7 +41,7 @@ function graph_subproblem(subproblem_soln)
         for (gen_name, gen_info) in subproblem.inputs["generators"]
             r = gen_info["region"]
             for t=subproblem.start:subproblem.finish
-                push!(df, [r gen_name gen_info["cost"] gen_info["capacity"] t gen_info["capacity"]*generation_vars[gen_name]["generation"][t] subproblem.demand[r][t]])
+                push!(df, [r gen_name gen_info["cost"] gen_info["capacity"] t max(gen_info["capacity"]*generation_vars[gen_name]["generation"][t],0) subproblem.demand[r][t]])
             end
         end
     return df
