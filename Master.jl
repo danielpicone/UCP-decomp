@@ -50,16 +50,16 @@ function create_rmp!(master::Master_problem)
 
     @variable(rmp, 1 >= lambda_deficit[s=1:S] >= 0)
     @variable(rmp, 1 >= λ[s=1:S, k in keys(subproblem_solutions[s])] >= 0)
-    # @variable(rmp, λ_startup[s in [(i, i+1) for i in 1:S-1], gen in keys(generators)] >= 0)
+    @variable(rmp, λ_startup[s in [(i, i+1) for i in 1:S-1], gen in keys(generators)] >= 0)
     # println([subproblem_solutions[s][k]["objective_value"] for s=1:S, k in keys(subproblem_solutions[s])])
     # for s=1:S, k in keys(subproblem_solutions[s])
     #     println(subproblem_solutions[s][k]["objective_value"])
     # end
-    # @objective(rmp, Min, sum(master.deficit_values[s] * lambda_deficit[s] for s=1:S) +
-    #                         sum(subproblem_solutions[s][k]["objective_value"]*λ[s, k] for s=1:S, k in keys(subproblem_solutions[s])) +
-    #                         sum(gen_info["startup"]*λ_startup[(s, s+1), gen] for s=1:S-1, (gen, gen_info) in generators))
     @objective(rmp, Min, sum(master.deficit_values[s] * lambda_deficit[s] for s=1:S) +
-                            sum(subproblem_solutions[s][k]["objective_value"]*λ[s, k] for s=1:S, k in keys(subproblem_solutions[s])))
+                            sum(subproblem_solutions[s][k]["objective_value"]*λ[s, k] for s=1:S, k in keys(subproblem_solutions[s])) +
+                            sum(gen_info["startup"]*λ_startup[(s, s+1), gen] for s=1:S-1, (gen, gen_info) in generators))
+    # @objective(rmp, Min, sum(master.deficit_values[s] * lambda_deficit[s] for s=1:S) +
+    #                         sum(subproblem_solutions[s][k]["objective_value"]*λ[s, k] for s=1:S, k in keys(subproblem_solutions[s])))
 
     @constraint(rmp, convexity_constraint[s=1:S], sum(lambda_deficit[s]) + sum(λ[s, k] for k in keys(subproblem_solutions[s])) == 1)
     # Ramp down constraints
@@ -80,10 +80,10 @@ function create_rmp!(master::Master_problem)
                 sum( λ[s, k]*value(subproblem_solutions[s][k]["vars"][:generator_output][gen, t]) for s=1:S, k in keys(subproblem_solutions[s]), t=subproblems[s].start:subproblems[s].finish)
                 <= master.finish*master.inputs["generators"][gen]["max_cf"])
     # Startup cost constraints
-    # @constraint(rmp, master_startup[gen in keys(generators), s=1:S-1], - sum(value.(subproblem_solutions[s][k]["vars"][:generator_startup][gen, subproblems[s].finish])*λ[s, k] for k in keys(subproblem_solutions[s]))
-    # + sum(value.(subproblem_solutions[s+1][k]["vars"][:generator_startup][gen, subproblems[s+1].start])*λ[s+1, k] for k in keys(subproblem_solutions[s+1]))
-    # <=
-    # λ_startup[(s, s+1), gen])
+    @constraint(rmp, master_startup[gen in keys(generators), s=1:S-1], - sum(value.(subproblem_solutions[s][k]["vars"][:generator_on][gen, subproblems[s].finish])*λ[s, k] for k in keys(subproblem_solutions[s]))
+    + sum(value.(subproblem_solutions[s+1][k]["vars"][:generator_on][gen, subproblems[s+1].start])*λ[s+1, k] for k in keys(subproblem_solutions[s+1]))
+    <=
+    λ_startup[(s, s+1), gen])
     master.model = rmp
     return true
 end
@@ -102,13 +102,17 @@ function get_solution(master::Master_problem)
 end
 
 function dual(master::Master_problem)
-    constraints = [name for (name, value) in master.model.obj_dict if typeof(value) <: JuMP.Containers.DenseAxisArray]
-    # constraints = [:max_cf, :master_startup]
+    # constraints = [name for (name, value) in master.model.obj_dict if typeof(value) <: JuMP.Containers.DenseAxisArray]
+    constraints = [:max_cf, :master_startup]
     mu = Dict()
     for con in constraints
         mu[con] = Dict()
         for gen in master.model.obj_dict[con].axes[1]
-            mu[con][gen] = dual.(master.model.obj_dict[con])[gen]
+            if con == :max_cf
+                mu[con][gen] = dual.(master.model.obj_dict[con])[gen]
+            elseif con == :master_startup
+                mu[con][gen] = dual.(master.model.obj_dict[con])[gen,:].data
+            end
         end
     end
     return mu

@@ -11,18 +11,20 @@ mutable struct Subproblem
     start::Int64
     finish::Int64
     order::Union{Int64, Nothing}
+    num_subproblems::Int64
     demand::Dict
     inputs::Dict
     regions::Set
     mu::Union{Nothing, Dict}
     model::Union{Nothing, JuMP.Model}
-    Subproblem(start, finish, order, demand, inputs, regions, mu, model) = start > finish ? error("Start is after finish") : new(start, finish, order,
-    demand, inputs, regions, mu, model)
+    Subproblem(start, finish, order, num_subproblems, demand, inputs, regions, mu, model) = start > finish ? error("Start is after finish") : new(start, finish, order,
+    num_subproblems, demand, inputs, regions, mu, model)
 end
 
 Base.copy(s::Subproblem) = Subproblem(s.start,
                                       s.finish,
                                       s.order,
+                                      s.num_subproblems,
                                       s.demand,
                                       s.inputs,
                                       s.regions,
@@ -33,6 +35,8 @@ function create_model!(subproblem::Subproblem; verbose = false)
     start = subproblem.start
     finish = subproblem.finish
     inputs = subproblem.inputs
+    order = subproblem.order
+    generators = inputs["generators"]
     mu = subproblem.mu
     regions = subproblem.regions
     directions = ["import", "export"]
@@ -47,15 +51,18 @@ function create_model!(subproblem::Subproblem; verbose = false)
         # println(subproblem.model.obj_dict[:generator_output])
         generator_output = subproblem.model.obj_dict[:generator_output]
         generator_startup = subproblem.model.obj_dict[:generator_startup]
+        generator_on = subproblem.model.obj_dict[:generator_on]
         deficit = subproblem.model.obj_dict[:deficit]
         surplus = subproblem.model.obj_dict[:surplus]
         @objective(subproblem.model, Min, sum(d["cost"] * d["capacity"] * generator_output[gen, t] +
-        d["startup"]*generator_startup[gen,t] for (gen,d) in inputs["generators"],t in start:finish) +
+        d["startup"]*generator_startup[gen,t] for (gen,d) in generators, t in start:finish) +
             sum(14700*deficit[r, t] for r in regions, t in start:finish) +
             sum(1000*surplus[r, t] for r in regions, t in start:finish) +
             # sum((mu[gen]["ramp_down"]- mu[gen]["ramp_up"]) * d["capacity"]*generator_output[gen, finish] for (gen, d) in inputs["generators"]) +
             # sum((-mu[gen]["ramp_down"] + mu[gen]["ramp_up"]) * d["capacity"]*generator_output[gen, start] for (gen, d) in inputs["generators"]) +
-            sum(-mu[:max_cf][gen]*generator_output[gen, t] for (gen, d) in inputs["generators"], t in start:finish if "max_cf" in keys(d)))
+            sum(-mu[:max_cf][gen]*generator_output[gen, t] for (gen, d) in generators, t in start:finish if "max_cf" in keys(d)) +
+            sum(mu[:master_startup][gen][order]*generator_on[gen, finish] for (gen,d) in generators if order < subproblem.num_subproblems) +
+            sum(-mu[:master_startup][gen][order-1]*generator_on[gen, start] for (gen,d) in generators if order > 1))
     else
         if verbose
             println("Adding variables")
@@ -94,7 +101,7 @@ function create_model!(subproblem::Subproblem; verbose = false)
         # @constraint(subproblem_model, ramp_down[gen in keys(inputs["generators"]), t=start:finish-1], inputs["generators"][gen]["capacity"]*(generator_output[gen, t] - generator_output[gen, t+1]) <= inputs["generators"][gen]["ramp"])
         # @constraint(subproblem_model, ramp_up[gen in keys(inputs["generators"]), t=start:finish-1], inputs["generators"][gen]["capacity"]*(generator_output[gen, t] - generator_output[gen, t+1]) >= -inputs["generators"][gen]["ramp"])
         # Start up constraint
-        # @constraint(subproblem_model, start_up[gen in keys(inputs["generators"]), t=start+1:finish], generator_startup[gen,t]>=generator_on[gen,t]-generator_on[gen,t-1])
+        @constraint(subproblem_model, start_up[gen in keys(inputs["generators"]), t=start+1:finish], generator_startup[gen,t]>=generator_on[gen,t]-generator_on[gen,t-1])
 
         # Interconnector loss constraints
         @constraint(subproblem_model, interconnector_loss[int in keys(inputs["interconnectors"]), t=start:finish], (1-inputs["interconnectors"][int]["loss"])*interconnector[int, t, "export"] == interconnector[int, t, "import"])
@@ -122,6 +129,7 @@ function split_problem(problem, K)
         end
         subproblems[k] = Decomposition.Subproblem(subproblem_start+1, subproblem_start + length,
         k,
+        K,
         subproblem_demand,
         problem.inputs,
         problem.regions,
@@ -138,7 +146,7 @@ function find_objective_value(subproblem::Subproblem)
     solution = subproblem.model.obj_dict
     obj_value = 0
     obj_value += sum(gen_info["cost"]*gen_info["capacity"]*value.(solution[:generator_output])[gen, t] for (gen, gen_info) in generators, t in start:finish)
-    obj_value += sum(gen_info["startup"]*gen_info["capacity"]*value.(solution[:generator_startup])[gen, t] for (gen, gen_info) in generators, t in start:finish)
+    obj_value += sum(gen_info["startup"]*value.(solution[:generator_startup])[gen, t] for (gen, gen_info) in generators, t in start:finish)
     obj_value += 14700*sum(value.(solution[:deficit]))
     obj_value += 1000*sum(value.(solution[:surplus]))
     return obj_value

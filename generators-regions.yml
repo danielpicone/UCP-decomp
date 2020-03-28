@@ -25,62 +25,62 @@ generators:
     region: "NSW"
     max_cf: 0.4
 
-  # peaking-gas_NSW:
-  #   capacity: 30
-  #   cost: 80
-  #   ramp: 20
-  #   mingen: 3
-  #   startup: 20
-  #   region: "NSW"
+  peaking-gas_NSW:
+    capacity: 30
+    cost: 80
+    ramp: 20
+    mingen: 3
+    startup: 20
+    region: "NSW"
 
-  # dsm_NSW:
-  #   capacity: 25
-  #   cost: 1000
-  #   ramp: 10000
-  #   mingen: 0
-  #   startup: 0
-  #   region: "NSW"
+  dsm_NSW:
+    capacity: 25
+    cost: 1000
+    ramp: 10000
+    mingen: 0
+    startup: 0
+    region: "NSW"
 
 
-  # coal_VIC:
-  #   capacity: 300
-  #   cost: 10
-  #   ramp: 15
-  #   mingen: 12
-  #   startup: 100
-  #   region: "VIC"
+  coal_VIC:
+    capacity: 300
+    cost: 10
+    ramp: 15
+    mingen: 12
+    startup: 100
+    region: "VIC"
 
-  # mid-merit-gas_VIC:
-  #   capacity: 20
-  #   cost: 30
-  #   ramp: 17
-  #   mingen: 2
-  #   startup: 30
-  #   region: "VIC"
+  mid-merit-gas_VIC:
+    capacity: 20
+    cost: 30
+    ramp: 17
+    mingen: 2
+    startup: 30
+    region: "VIC"
 
-  # peaking-gas_VIC:
-  #   capacity: 30
-  #   cost: 80
-  #   ramp: 20
-  #   mingen: 3
-  #   startup: 20
-  #   region: "VIC"
+  peaking-gas_VIC:
+    capacity: 30
+    cost: 80
+    ramp: 20
+    mingen: 3
+    startup: 20
+    region: "VIC"
 
-  # dsm_VIC:
-  #   capacity: 30
-  #   cost: 1000
-  #   ramp: 10000
-  #   mingen: 0
-  #   startup: 0
-  #   region: "VIC"
+  dsm_VIC:
+    capacity: 30
+    cost: 1000
+    ramp: 10000
+    mingen: 0
+    startup: 0
+    region: "VIC"
 
-  # wind_VIC:
-  #   capacity: 15
-  #   cost: 0
-  #   ramp: 10000
-  #   mingen: 1.5
-  #   startup: 0
-  #   region: "VIC"
+  wind_VIC:
+    capacity: 15
+    cost: 0
+    ramp: 10000
+    mingen: 1.5
+    startup: 0
+    region: "VIC"
 
 interconnectors:
   vic-nsw:

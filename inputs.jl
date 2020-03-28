@@ -28,8 +28,8 @@ end
 
 Random.seed!(100)
 
-S = 2
-T = 3*S
+S = 10
+T = 4*S
 # T = 12*2*S
 inputs= YAML.load(open("generators-regions.yml"))
 regions = Set([gen_info["region"] for (gen_name, gen_info) in inputs["generators"]])
@@ -46,14 +46,14 @@ for t=1:T
     end
 end
 
-# demand["NSW"][24] = demand["NSW"][24]-15
+# demand["NSW"][3] = demand["NSW"][3]-25
 # demand["NSW"][25] = demand["NSW"][25]-30
 # demand["NSW"][26] = demand["NSW"][26]-15
 
 # Set up the master problem
 mu = Helpers.reset_mu()
 
-day_one = Decomposition.Subproblem(1, T, nothing, demand, inputs, regions, mu, nothing)
+day_one = Decomposition.Subproblem(1, T, nothing, 1, demand, inputs, regions, mu, nothing)
 
 Decomposition.create_model!(day_one; verbose = true)
 Decomposition.add_coupling_constraints!(day_one)
@@ -71,7 +71,7 @@ end
 
 
 subproblems = Decomposition.split_problem(day_one, S)
-for k=1:10
+for k=1:25
     if k == 1
         global convexity_dual = 1e10*ones(S)
     end
@@ -84,6 +84,7 @@ for k=1:10
     # alue = sum(objective_value(subproblems[s].model) - convexity_dual[s] for s in 1:S)
     println("Iteration $k: $convergence_value")
     if convergence_value > -0.001
+        println("--------- Restricted master problem has reached convergence --------")
         break
     end
 
@@ -92,8 +93,6 @@ for k=1:10
         if (objective_value(subproblems[s].model) - convexity_dual[s]) < -0.001
             subproblem_solutions[s][k] = Dict("vars" => deepcopy(sub.model.obj_dict),
                                               "objective_value" => Decomposition.find_objective_value(sub))
-        else
-            println("Subproblem $s has reached optimality")
         end
     end
 
@@ -104,13 +103,7 @@ for k=1:10
 
     mu = dual(master)
 
-    # if k == 2
-    #     mu[:max_cf]["hydro_NSW"] = -10
-    # end
-    # if k == 3
-    #     mu[:max_cf]["hydro_NSW"] = -60
-    # end
-    println(mu)
+    # println(mu)
 
     for sub in subproblems
         sub.mu = mu
