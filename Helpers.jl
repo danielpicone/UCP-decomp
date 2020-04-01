@@ -11,6 +11,16 @@ using Gadfly
 
 export graph_subproblem, reset_mu
 
+struct inputs
+    generators
+    interconnectors
+    storage
+    regions
+    start
+    finish
+    num_subproblems
+end
+
 function graph_subproblem(subproblem_soln)
     function create_demand_df(subproblem)
         d = DataFrames.DataFrame(region = String[], interval = Float64[], value = Float64[])

@@ -28,9 +28,8 @@ end
 
 Random.seed!(100)
 
-S = 10
-T = 4*S
-# T = 12*2*S
+S = 8
+T = 20*S
 inputs= YAML.load(open("generators-regions.yml"))
 regions = Set([gen_info["region"] for (gen_name, gen_info) in inputs["generators"]])
 demand = Dict()
@@ -41,14 +40,11 @@ for t=1:T
         if t==1
             demand[r] = Dict()
         end
-        # demand[r][t] = 45+40*(rand()-0.5)*rand_addition
         demand[r][t] = 45+70*(rand()-0.5)*rand_addition
     end
 end
 
-# demand["NSW"][3] = demand["NSW"][3]-25
-# demand["NSW"][25] = demand["NSW"][25]-30
-# demand["NSW"][26] = demand["NSW"][26]-15
+new_inputs = Master.Inputs(inputs, demand)
 
 # Set up the master problem
 mu = Helpers.reset_mu()
@@ -57,11 +53,7 @@ day_one = Decomposition.Subproblem(1, T, nothing, 1, demand, inputs, regions, mu
 
 Decomposition.create_model!(day_one; verbose = true)
 Decomposition.add_coupling_constraints!(day_one)
-optimize!(day_one.model)
-
-# Solve the model
 # optimize!(day_one.model)
-# Helpers.graph_subproblem(day_one)
 
 
 subproblem_solutions = Dict{Int64, Dict{Int64, Any}}()
@@ -78,10 +70,7 @@ for k=1:25
     Decomposition.create_model!(subproblems; verbose = true)
     optimize!(subproblems)
     convergence_value = sum(objective_value(subproblems[s].model) - convexity_dual[s] for s in 1:S)
-    # for s=1:S
-    #     println(objective_value(subproblems[s].model) - convexity_dual[s])
-    # end
-    # alue = sum(objective_value(subproblems[s].model) - convexity_dual[s] for s in 1:S)
+
     println("Iteration $k: $convergence_value")
     if convergence_value > -0.001
         println("--------- Restricted master problem has reached convergence --------")
@@ -110,3 +99,7 @@ for k=1:25
     end
 
 end
+
+Master.create_solution!(master);
+
+mip_gap = Master.find_objective_value(master)/objective_value(master.model) - 1

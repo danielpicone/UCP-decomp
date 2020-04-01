@@ -49,11 +49,11 @@ function create_model!(subproblem::Subproblem; verbose = false)
     # Objective function
     if !isnothing(mu)
         # println(subproblem.model.obj_dict[:generator_output])
-        generator_output = subproblem.model.obj_dict[:generator_output]
-        generator_startup = subproblem.model.obj_dict[:generator_startup]
-        generator_on = subproblem.model.obj_dict[:generator_on]
-        deficit = subproblem.model.obj_dict[:deficit]
-        surplus = subproblem.model.obj_dict[:surplus]
+        generator_output = subproblem.model[:generator_output]
+        generator_startup = subproblem.model[:generator_startup]
+        generator_on = subproblem.model[:generator_on]
+        deficit = subproblem.model[:deficit]
+        surplus = subproblem.model[:surplus]
         @objective(subproblem.model, Min, sum(d["cost"] * d["capacity"] * generator_output[gen, t] +
         d["startup"]*generator_startup[gen,t] for (gen,d) in generators, t in start:finish) +
             sum(14700*deficit[r, t] for r in regions, t in start:finish) +
@@ -70,8 +70,11 @@ function create_model!(subproblem::Subproblem; verbose = false)
         else
             subproblem_model = JuMP.Model(with_optimizer(GLPK.Optimizer, msg_lev = GLPK.OFF, presolve = true))
         end
+        # Demand variables
         @variable(subproblem_model, deficit[r=regions, t=start:finish] >= 0)
         @variable(subproblem_model, surplus[r=regions, t=start:finish] >= 0)
+
+        # Generation variables
         @variable(subproblem_model, 1>=generator_output[keys(inputs["generators"]), t=start:finish]>=0)
         @variable(subproblem_model, generator_on[keys(inputs["generators"]), t=start:finish], Bin)
         @variable(subproblem_model, generator_startup[keys(inputs["generators"]), t=start:finish], Bin)
