@@ -43,7 +43,7 @@ generators:
 
 
   coal_VIC:
-    capacity: 300
+    capacity: 30
     cost: 10
     ramp: 15
     mingen: 12
@@ -89,3 +89,10 @@ interconnectors:
     export_capacity: 20
     import_capacity: 15
     loss: 0.05
+
+storage:
+  battery_NSW:
+    capacity: 10
+    energy: 20
+    efficiency: 0.8
+    region: "NSW"
