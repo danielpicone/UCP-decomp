@@ -97,7 +97,7 @@ function create_model!(subproblem::Subproblem, inputs::Inputs; verbose = false)
         @variable(subproblem_model, 1>=storage_level[keys(storage), t=start:finish+1]>=0)
 
         @objective(subproblem_model, Min, sum(d["cost"] * d["capacity"] * generator_output[gen, t] +
-        d["startup"]*generator_startup[gen,t] for (gen,d) in generators,t in intervals) +
+        d["startup"]*generator_startup[gen,t] for (gen,d) in generators, t in intervals) +
             sum(14700*deficit[r, t] for r in regions, t in intervals) +
             sum(1000*surplus[r, t] for r in regions, t in intervals))
 
@@ -179,7 +179,7 @@ function find_objective_value(subproblem::Subproblem)
     solution = subproblem.model.obj_dict
     obj_value = 0
     obj_value += sum(gen_info["cost"]*gen_info["capacity"]*value.(solution[:generator_output])[gen, t] for (gen, gen_info) in generators, t in start:finish)
-    obj_value += sum(gen_info["startup"]*value.(solution[:generator_startup])[gen, t] for (gen, gen_info) in generators, t in start:finish)
+    obj_value += sum(gen_info["startup"]*value.(solution[:generator_startup])[gen, t] for (gen, gen_info) in generators, t in start:finish if t > 1)
     obj_value += 14700*sum(value.(solution[:deficit]))
     obj_value += 1000*sum(value.(solution[:surplus]))
     return obj_value
@@ -204,6 +204,31 @@ function update_objective(problem::Subproblem)
         sum(1000*surplus[r, t] for r in regions, t=start:finish) +
         sum((mu[gen]["ramp_down"]- mu[gen]["ramp_up"]) * d["capacity"]*generator_output[gen, finish] for (gen, d) in inputs["generators"]) +
         sum((-mu[gen]["ramp_down"] + mu[gen]["ramp_up"]) * d["capacity"]*generator_output[gen, start] for (gen, d) in inputs["generators"]))
+end
+
+function add_column!(subproblems::Array, subproblem_solutions, master, branching_variables)
+    if !(isnothing(master.model))
+        convexity_dual = dual.(master.model.obj_dict[:convexity_constraint])
+    else
+        convexity_dual = 1e10*ones(maximum(keys(subproblems)))
+    end
+    for (s, sub) in enumerate(subproblems)
+        if (objective_value(subproblems[s].model) - convexity_dual[s]) < -0.001
+            new_variable_values = deepcopy(sub.model.obj_dict)
+            if isempty(subproblem_solutions[s])
+                k = 1
+            else
+                k = maximum(keys(subproblem_solutions[s]))+1
+            end
+            subproblem_solutions[s][k] = Dict("vars" => new_variable_values,
+                                              "objective_value" => Decomposition.find_objective_value(sub))
+            for ((ind, fix_value), lambda_inds) in branching_variables[s]
+                if value(new_variable_values[:generator_on][ind]) != fix_value
+                    push!(branching_variables[s][(ind, fix_value)], k)
+                end
+            end
+        end
+    end
 end
 
 
@@ -233,6 +258,26 @@ function solve_node(subproblems::Array{Subproblem,1}, node::Node)
         for ((subproblem_id, ind), fix_value) in fix_values
             set_binary(subproblem.model[:generator_on][ind])
             unfix(subproblem.model[:generator_on][ind])
+        end
+    end
+end
+
+function constrain_subproblems!(subproblems::Array{Subproblem,1}, node::Node)
+    for (s, fix_values) in enumerate(node.variable_values)
+        subproblem = subproblems[s]
+        for ((subproblem_id, ind), fix_value) in fix_values
+            unset_binary(subproblem.model[:generator_on][ind])
+            fix(subproblem.model[:generator_on][ind], fix_value)
+        end
+    end
+end
+
+function unconstrain_subproblems!(subproblems::Array{Subproblem,1}, node::Node)
+    for (s, fix_values) in enumerate(node.variable_values)
+        subproblem = subproblems[s]
+        for ((subproblem_id, ind), fix_value) in fix_values
+            unfix(subproblem.model[:generator_on][ind])
+            set_binary(subproblem.model[:generator_on][ind])
         end
     end
 end

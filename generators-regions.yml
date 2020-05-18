@@ -21,7 +21,7 @@ generators:
     cost: 4
     ramp: 10
     mingen: 1
-    startup: 0
+    startup: 10
     region: "NSW"
     max_cf: 0.4
 
